@@ -16,7 +16,7 @@ import shutil
 main_folder = 'vision_project'
 
 # List of class names (folder names)
-class_names = ['ALU_p40', 'ALU_p80', 'ALU_p120', 'ALU_p180', 'ALU_p240', 'ALU_p400', 'ALU_p500']
+class_names = ['STEEL_p40', 'STEEL_p80', 'STEEL_p120', 'STEEL_p180', 'STEEL_p240', 'STEEL_p400', 'STEEL_p500', 'ALU_p40', 'ALU_p80', 'ALU_p120', 'ALU_p180', 'ALU_p240', 'ALU_p400', 'ALU_p500']
 
 # Create folders for train, test, and validation sets
 train_folder = 'train'
