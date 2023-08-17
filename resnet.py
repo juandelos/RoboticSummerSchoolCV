@@ -16,8 +16,8 @@ import os
 from PIL import Image
 from tempfile import TemporaryDirectory
 
-# DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-DEVICE = torch.device("cpu")
+DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+# DEVICE = torch.device("cpu")
 class ResNet():
     def main(self):
         cudnn.benchmark = True
@@ -27,20 +27,21 @@ class ResNet():
         # Just normalization for validation
         self.data_transforms = {
             'train': transforms.Compose([
-                transforms.RandomResizedCrop(224),
-                transforms.RandomHorizontalFlip(),
+                # transforms.RandomResizedCrop(224),
+                # transforms.RandomHorizontalFlip(),
+                transforms.Resize(224),
                 transforms.ToTensor(),
                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
             ]),
             'val': transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
+                transforms.Resize(224),
+                # transforms.CenterCrop(224),
                 transforms.ToTensor(),
                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
             ]),
         }
 
-        data_dir = 'vision_project'
+        data_dir = '/content/gdrive/My Drive/vision_project'
         self.image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x),
                                                 self.data_transforms[x])
                         for x in ['train', 'val']}
@@ -68,26 +69,33 @@ class ResNet():
 
 
 
-        model_ft = models.resnet18(weights=ResNet18_Weights.DEFAULT)
-        num_ftrs = model_ft.fc.in_features
+        self.model_ft = models.resnet18(weights=ResNet18_Weights.DEFAULT)
+        num_ftrs = self.model_ft.fc.in_features
         # Here the size of each output sample is set to 2.
         # Alternatively, it can be generalized to ``nn.Linear(num_ftrs, len(class_names))``.
-        model_ft.fc = nn.Linear(num_ftrs, 4)
+        
+        # for param in model_ft.parameters():
+        #   param.requires_grad = False
+        # for param in model_ft.layer4.parameters():
+        #     param.requires_grad = True
+        self.model_ft.fc = nn.Linear(num_ftrs, 7)
 
-        model_ft = model_ft.to(self.device)
+        self.model_ft = self.model_ft.to(self.device)
+
+
 
         criterion = nn.CrossEntropyLoss()
 
         # Observe that all parameters are being optimized
-        optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
+        optimizer_ft = optim.SGD(self.model_ft.parameters(), lr=0.001, momentum=0.9)
 
         # Decay LR by a factor of 0.1 every 7 epochs
         exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 
-        model_ft = self.train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
-                            num_epochs=25)
+        self.model_ft = self.train_model(criterion, optimizer_ft, exp_lr_scheduler,
+                            num_epochs=30)
 
-        self.visualize_model(model_ft)
+        self.visualize_model(self.model_ft)
 
     def visualize_model(self, model, num_images=6):
         was_training = model.training
@@ -115,14 +123,17 @@ class ResNet():
                         return
             model.train(mode=was_training)
 
-    def train_model(self, model, criterion, optimizer, scheduler, num_epochs=25):
+    def train_model(self, criterion, optimizer, scheduler, num_epochs=25):
         since = time.time()
-
+        self.train_loss = []
+        self.train_acc = []
+        self.val_loss = []
+        self.val_acc = []
         # Create a temporary directory to save training checkpoints
         with TemporaryDirectory() as tempdir:
             best_model_params_path = os.path.join(tempdir, 'best_model_params.pt')
 
-            torch.save(model.state_dict(), best_model_params_path)
+            torch.save(self.model_ft.state_dict(), best_model_params_path)
             best_acc = 0.0
 
             for epoch in range(num_epochs):
@@ -130,11 +141,11 @@ class ResNet():
                 print('-' * 10)
 
                 # Each epoch has a training and validation phase
-                for phase in ['train', 'val']:
+                for phase in ['val', 'train']:
                     if phase == 'train':
-                        model.train()  # Set model to training mode
+                        self.model_ft.train()  # Set model to training mode
                     else:
-                        model.eval()   # Set model to evaluate mode
+                        self.model_ft.eval()   # Set model to evaluate mode
 
                     running_loss = 0.0
                     running_corrects = 0
@@ -150,7 +161,7 @@ class ResNet():
                         # forward
                         # track history if only in train
                         with torch.set_grad_enabled(phase == 'train'):
-                            outputs = model(inputs)
+                            outputs = self.model_ft(inputs)
                             _, preds = torch.max(outputs, 1)
                             loss = criterion(outputs, labels)
 
@@ -165,16 +176,24 @@ class ResNet():
                     if phase == 'train':
                         scheduler.step()
 
+
                     epoch_loss = running_loss / self.dataset_sizes[phase]
                     epoch_acc = running_corrects.double() / self.dataset_sizes[phase]
 
                     print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
 
                     # deep copy the model
+                    if phase == 'train':
+                        self.train_loss.append(epoch_loss)
+                        self.train_acc.append(epoch_acc)
+                        print(self.val_loss.append(epoch_loss))
+                    if phase == 'val':
+                        self.val_loss.append(epoch_loss)
+                        self.val_acc.append(epoch_acc)
                     if phase == 'val' and epoch_acc > best_acc:
                         best_acc = epoch_acc
-                        torch.save(model.state_dict(), best_model_params_path)
-
+                        torch.save(self.model_ft.state_dict(), best_model_params_path)
+                    
                 print()
 
             time_elapsed = time.time() - since
@@ -182,8 +201,8 @@ class ResNet():
             print(f'Best val Acc: {best_acc:4f}')
 
             # load best model weights
-            model.load_state_dict(torch.load(best_model_params_path))
-        return model
+            self.model_ft.load_state_dict(torch.load(best_model_params_path))
+        return self.model_ft
     
     def imshow(self, inp, title=None):
         """Display image for Tensor."""
@@ -197,7 +216,7 @@ class ResNet():
             plt.title(title)
         plt.pause(0.001)  # pause a bit so that plots are updated
 
-
+        
 if __name__ == '__main__':
     obj = ResNet()
     obj.main()
