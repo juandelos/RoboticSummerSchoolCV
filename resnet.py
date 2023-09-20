@@ -1,5 +1,3 @@
-# License: BSD
-# Author: Sasank Chilamkurthy
 
 import torch
 import torch.nn as nn
